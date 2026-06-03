@@ -4,125 +4,128 @@ import ta
 import time
 import schedule
 import os
+import hmac
+import hashlib
+from urllib.parse import urlencode
 
 # ===== CONFIGURATION =====
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 CHAT_ID = os.environ.get("CHAT_ID", "8175119797")
+BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY", "")
+BINANCE_SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY", "")
 
-# 20 cryptos : court terme (volatiles) + long terme (solides)
+# 20 cryptos : symboles Binance (paires USDT)
 CRYPTOS = {
     # --- LONG TERME (stables, fiables) ---
-    "Bitcoin": "bitcoin",
-    "Ethereum": "ethereum",
-    "BNB": "binancecoin",
-    "Solana": "solana",
-    "Cardano": "cardano",
-    "Avalanche": "avalanche-2",
-    "Chainlink": "chainlink",
-    "Polkadot": "polkadot",
-    "Litecoin": "litecoin",
-    "XRP": "ripple",
-    # --- COURT TERME (plus volatiles = plus d opportunites rapides) ---
-    "Dogecoin": "dogecoin",
-    "Shiba Inu": "shiba-inu",
-    "Pepe": "pepe",
-    "Injective": "injective-protocol",
-    "Arbitrum": "arbitrum",
-    "Optimism": "optimism",
-    "Aptos": "aptos",
-    "Sui": "sui",
-    "Render": "render-token",
-    "Fetch.ai": "fetch-ai"
+    "Bitcoin": "BTCUSDT",
+    "Ethereum": "ETHUSDT",
+    "BNB": "BNBUSDT",
+    "Solana": "SOLUSDT",
+    "Cardano": "ADAUSDT",
+    "Avalanche": "AVAXUSDT",
+    "Chainlink": "LINKUSDT",
+    "Polkadot": "DOTUSDT",
+    "Litecoin": "LTCUSDT",
+    "XRP": "XRPUSDT",
+    # --- COURT TERME (plus volatiles = plus d'opportunites rapides) ---
+    "Dogecoin": "DOGEUSDT",
+    "Shiba Inu": "SHIBUSDT",
+    "Pepe": "PEPEUSDT",
+    "Injective": "INJUSDT",
+    "Arbitrum": "ARBUSDT",
+    "Optimism": "OPUSDT",
+    "Aptos": "APTUSDT",
+    "Sui": "SUIUSDT",
+    "Render": "RENDERUSDT",
+    "Fetch.ai": "FETUSDT",
 }
-# ==========================
 
-def envoyer_alerte(message):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"})
-    print("Alerte envoyee !")
+RSI_PERIOD = 14
+RSI_ACHAT = 35
+RSI_VENTE = 65
 
-def get_prix(coin_id):
-    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
-    params = {"vs_currency": "usd", "days": "5", "interval": "hourly"}
+# ===== RECUPERATION PRIX VIA BINANCE =====
+def get_prix(symbol):
+    url = "https://api.binance.com/api/v3/klines"
+    params = {
+        "symbol": symbol,
+        "interval": "1h",
+        "limit": 100
+    }
     response = requests.get(url, params=params, timeout=10)
     data = response.json()
-    closes = [item[1] for item in data["prices"]]
-    return closes
+    if isinstance(data, list) and len(data) > 0:
+        closes = [float(item[4]) for item in data]  # index 4 = close price
+        return closes
+    else:
+        raise ValueError(f"Reponse invalide pour {symbol}: {data}")
 
+# ===== CALCUL RSI =====
 def calculer_rsi(closes):
     series = pd.Series(closes)
-    rsi = ta.momentum.RSIIndicator(series, window=14).rsi()
+    rsi = ta.momentum.RSIIndicator(series, window=RSI_PERIOD).rsi()
     return round(rsi.iloc[-1], 2)
 
-def force_signal(rsi):
-    if rsi < 20:
-        return "TRES FORT"
-    elif rsi < 25:
-        return "FORT"
-    elif rsi < 30:
-        return "MODERE"
-    elif rsi > 80:
-        return "TRES FORT"
-    elif rsi > 75:
-        return "FORT"
-    else:
-        return "MODERE"
+# ===== CALCUL GAIN/PERTE =====
+def calcul_gain_perte(closes):
+    if len(closes) >= 2:
+        variation = ((closes[-1] - closes[-2]) / closes[-2]) * 100
+        return round(variation, 2)
+    return 0.0
 
-def analyser_marche():
+# ===== ENVOI TELEGRAM =====
+def envoyer_telegram(message):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
+    try:
+        requests.post(url, data=payload, timeout=10)
+    except Exception as e:
+        print(f"Erreur Telegram: {e}")
+
+# ===== ANALYSE PRINCIPALE =====
+def analyser():
     print("Analyse en cours...")
-    alertes_envoyes = 0
-    for nom, coin_id in CRYPTOS.items():
+    alertes = []
+
+    for nom, symbol in CRYPTOS.items():
         try:
-            time.sleep(2)  # eviter le rate limit CoinGecko
-            prix = get_prix(coin_id)
-            rsi = calculer_rsi(prix)
-            prix_actuel = round(prix[-1], 6 if prix[-1] < 0.01 else 2)
-            force = force_signal(rsi)
-            print(f"{nom} | {prix_actuel}$ | RSI: {rsi}")
+            closes = get_prix(symbol)
+            prix_actuel = closes[-1]
+            rsi = calculer_rsi(closes)
+            variation = calcul_gain_perte(closes)
+            signe = "+" if variation >= 0 else ""
+            print(f"{nom} | {prix_actuel}$ | RSI: {rsi} | {signe}{variation}%")
 
-            if rsi < 30:
-                message = f"""<b>SIGNAL ACHAT - {nom}</b>
-
-Force du signal : {force}
-Prix actuel : {prix_actuel} $
-RSI : {rsi} (survendu)
-Signal : ACHETER
-Stop-loss : {round(prix_actuel * 0.98, 6 if prix_actuel < 0.01 else 2)} $ (-2%)
-Objectif : {round(prix_actuel * 1.04, 6 if prix_actuel < 0.01 else 2)} $ (+4%)
-Raison : RSI sous 30 = rebond probable
-
-Si tu investis 10 eur :
-- Objectif gain : +0.40 eur
-- Perte max : -0.20 eur"""
-                envoyer_alerte(message)
-                alertes_envoyes += 1
-
-            elif rsi > 70:
-                message = f"""<b>SIGNAL VENTE - {nom}</b>
-
-Force du signal : {force}
-Prix actuel : {prix_actuel} $
-RSI : {rsi} (suracheté)
-Signal : VENDRE / ATTENDRE
-Stop-loss : {round(prix_actuel * 1.02, 6 if prix_actuel < 0.01 else 2)} $ (+2%)
-Objectif : {round(prix_actuel * 0.96, 6 if prix_actuel < 0.01 else 2)} $ (-4%)
-Raison : RSI au-dessus de 70 = correction probable"""
-                envoyer_alerte(message)
-                alertes_envoyes += 1
-
-            else:
-                print(f"Zone neutre - pas de signal pour {nom}")
+            if rsi < RSI_ACHAT:
+                alertes.append(
+                    f"<b>ACHAT possible</b> - {nom}\n"
+                    f"Prix: {prix_actuel}$\n"
+                    f"RSI: {rsi} (survente)\n"
+                    f"Variation 1h: {signe}{variation}%"
+                )
+            elif rsi > RSI_VENTE:
+                alertes.append(
+                    f"<b>VENTE possible</b> - {nom}\n"
+                    f"Prix: {prix_actuel}$\n"
+                    f"RSI: {rsi} (surachat)\n"
+                    f"Variation 1h: {signe}{variation}%"
+                )
 
         except Exception as e:
             print(f"Erreur pour {nom}: {e}")
 
-    if alertes_envoyes == 0:
+    if alertes:
+        message = "\n\n".join(alertes)
+        envoyer_telegram(message)
+        print(f"Analyse terminee ! {len(alertes)} alerte(s) envoyee(s)")
+    else:
         print("Aucun signal detecte - marche calme")
-    print(f"Analyse terminee ! {alertes_envoyes} alerte(s) envoyee(s)")
+        envoyer_telegram("Analyse terminee - Aucun signal fort detecte")
 
-schedule.every(1).hours.do(analyser_marche)
-
-analyser_marche()
+# ===== LANCEMENT =====
+print("Bot crypto demarre !")
+analyser()
+schedule.every(1).hours.do(analyser)
 
 while True:
     schedule.run_pending()
