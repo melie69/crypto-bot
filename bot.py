@@ -3,10 +3,11 @@ import pandas as pd
 import ta
 import time
 import schedule
+import os
 
 # ===== CONFIGURATION =====
-TOKEN = "TON_TOKEN_ICI"
-CHAT_ID = "8175119797"
+TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
+CHAT_ID = os.environ.get("CHAT_ID", "8175119797")
 
 CRYPTOS = {
     "Bitcoin": "bitcoin",
@@ -73,10 +74,8 @@ Raison : RSI au-dessus de 70 = correction probable"""
 
     print("Analyse terminee !")
 
-# Lancer l'analyse toutes les heures
 schedule.every(1).hours.do(analyser_marche)
 
-# Premiere analyse immediate
 analyser_marche()
 
 while True:
