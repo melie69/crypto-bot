@@ -11,9 +11,9 @@ CHAT_ID = os.environ.get("CHAT_ID", "8175119797")
 BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY", "")
 BINANCE_SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY", "")
 
-# ===== 30 CRYPTOS =====
+# ===== 50 CRYPTOS =====
 CRYPTOS = {
-    # --- LONG TERME ---
+    # --- LONG TERME (solides) ---
     "Bitcoin": "BTCUSDT",
     "Ethereum": "ETHUSDT",
     "BNB": "BNBUSDT",
@@ -29,13 +29,15 @@ CRYPTOS = {
     "Aave": "AAVEUSDT",
     "Filecoin": "FILUSDT",
     "Near": "NEARUSDT",
-    # --- COURT TERME ---
-    "Dogecoin": "DOGEUSDT",
-    "Shiba Inu": "SHIBUSDT",
-    "Pepe": "PEPEUSDT",
-    "Injective": "INJUSDT",
+    "Stellar": "XLMUSDT",
+    "Tron": "TRXUSDT",
+    "Monero": "XMRUSDT",
+    "Ethereum Classic": "ETCUSDT",
+    "Internet Computer": "ICPUSDT",
+    # --- MOYEN TERME (DeFi/Layer2) ---
     "Arbitrum": "ARBUSDT",
     "Optimism": "OPUSDT",
+    "Injective": "INJUSDT",
     "Aptos": "APTUSDT",
     "Sui": "SUIUSDT",
     "Render": "RENDERUSDT",
@@ -45,11 +47,30 @@ CRYPTOS = {
     "Notcoin": "NOTUSDT",
     "Floki": "FLOKIUSDT",
     "Turbo": "TURBOUSDT",
+    "Starknet": "STRKUSDT",
+    "Mantle": "MNTUSDT",
+    "Sei": "SEIUSDT",
+    # --- COURT TERME (memecoins / volatiles) ---
+    "Dogecoin": "DOGEUSDT",
+    "Shiba Inu": "SHIBUSDT",
+    "Pepe": "PEPEUSDT",
+    "Brett": "BRETTUSDT",
+    "Mog": "MOGUSDT",
+    "Cat in a Dogs World": "MEWUSDT",
+    "Book of Meme": "BOOMUSDT",
+    "Popcat": "POPCATUSDT",
+    "Neiro": "NEIROUSDT",
+    "Goat": "GOATUSDT",
+    "Act I": "ACTUSDT",
+    "Grass": "GRASSUSDT",
+    "Pnut": "PNUTUSDT",
+    "Moodeng": "MOODENGUSDT",
+    "Sundog": "SUNDOGUSDT",
 }
 
 RSI_PERIOD = 14
-RSI_ACHAT = 40   # signal achat si RSI < 40
-RSI_VENTE = 60   # signal vente si RSI > 60
+RSI_ACHAT = 40
+RSI_VENTE = 60
 
 # ===== PRIX VIA BINANCE =====
 def get_prix(symbol):
@@ -91,38 +112,35 @@ def analyser():
             print(f"{nom} | {prix}$ | RSI: {rsi} | {signe}{variation}%")
 
             if rsi < RSI_ACHAT:
-                emoji = "🟢"
                 alertes.append(
-                    f"{emoji} <b>OPPORTUNITE ACHAT</b> - <b>{nom}</b>\n"
-                    f"💰 Prix actuel : <b>{prix} $</b>\n"
-                    f"📊 RSI : <b>{rsi}</b> (zone de survente)\n"
+                    f"🟢 <b>OPPORTUNITE ACHAT</b> - <b>{nom}</b>\n"
+                    f"💰 Prix : <b>{prix} $</b>\n"
+                    f"📊 RSI : <b>{rsi}</b> (survente)\n"
                     f"📈 Variation 1h : <b>{signe}{variation}%</b>\n"
-                    f"👉 Le marche est survendu — potentiel rebond"
+                    f"👉 Potentiel rebond"
                 )
             elif rsi > RSI_VENTE:
-                emoji = "🔴"
                 alertes.append(
-                    f"{emoji} <b>SIGNAL VENTE</b> - <b>{nom}</b>\n"
-                    f"💰 Prix actuel : <b>{prix} $</b>\n"
-                    f"📊 RSI : <b>{rsi}</b> (zone de surachat)\n"
+                    f"🔴 <b>SIGNAL VENTE</b> - <b>{nom}</b>\n"
+                    f"💰 Prix : <b>{prix} $</b>\n"
+                    f"📊 RSI : <b>{rsi}</b> (surachat)\n"
                     f"📈 Variation 1h : <b>{signe}{variation}%</b>\n"
-                    f"👉 Le marche est surachete — attention a la correction"
+                    f"👉 Attention correction possible"
                 )
 
         except Exception as e:
             print(f"Erreur pour {nom}: {e}")
 
     if alertes:
-        header = f"🚨 <b>CRYPTO ALERTE by Mel</b> 🚨\n{len(alertes)} signal(s) detecte(s)\n" + "━"*25 + "\n\n"
+        header = f"🚨 <b>CRYPTO ALERTE by Mel</b> 🚨\n{len(alertes)} signal(s) sur 50 cryptos\n" + "━"*25 + "\n\n"
         message = header + "\n\n".join(alertes)
         envoyer_telegram(message)
         print(f"Analyse terminee ! {len(alertes)} alerte(s) envoyee(s)")
     else:
-        # Pas de message si aucun signal = pas de spam
-        print("Aucun signal detecte - marche calme - pas de message envoye")
+        print("Aucun signal - marche calme - pas de message")
 
 # ===== LANCEMENT =====
-print("Bot crypto demarre !")
+print("Bot crypto demarre ! 50 cryptos surveillees")
 analyser()
 schedule.every(1).hours.do(analyser)
 
