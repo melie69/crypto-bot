@@ -1,169 +1,167 @@
+import os
 import requests
 import pandas as pd
-import ta
-import time
 import schedule
-import os
+import time
 from datetime import datetime
 
-# ===== CONFIGURATION =====
-TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
-CHAT_ID = os.environ.get("CHAT_ID", "8175119797")
-BINANCE_API_KEY = os.environ.get("BINANCE_API_KEY", "")
-BINANCE_SECRET_KEY = os.environ.get("BINANCE_SECRET_KEY", "")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-# ===== 50 CRYPTOS =====
-CRYPTOS = {
-    # --- LONG TERME (solides) ---
-    "Bitcoin": "BTCUSDT",
-    "Ethereum": "ETHUSDT",
-    "BNB": "BNBUSDT",
-    "Solana": "SOLUSDT",
-    "Cardano": "ADAUSDT",
-    "Avalanche": "AVAXUSDT",
-    "Chainlink": "LINKUSDT",
-    "Polkadot": "DOTUSDT",
-    "Litecoin": "LTCUSDT",
-    "XRP": "XRPUSDT",
-    "Cosmos": "ATOMUSDT",
-    "Uniswap": "UNIUSDT",
-    "Aave": "AAVEUSDT",
-    "Filecoin": "FILUSDT",
-    "Near": "NEARUSDT",
-    "Stellar": "XLMUSDT",
-    "Tron": "TRXUSDT",
-    "Monero": "XMRUSDT",
-    "Ethereum Classic": "ETCUSDT",
-    "Internet Computer": "ICPUSDT",
-    # --- MOYEN TERME ---
-    "Arbitrum": "ARBUSDT",
-    "Optimism": "OPUSDT",
-    "Injective": "INJUSDT",
-    "Aptos": "APTUSDT",
-    "Sui": "SUIUSDT",
-    "Render": "RENDERUSDT",
-    "Fetch.ai": "FETUSDT",
-    "Bonk": "BONKUSDT",
-    "WIF": "WIFUSDT",
-    "Notcoin": "NOTUSDT",
-    "Floki": "FLOKIUSDT",
-    "Turbo": "TURBOUSDT",
-    "Starknet": "STRKUSDT",
-    "Mantle": "MNTUSDT",
-    "Sei": "SEIUSDT",
-    # --- COURT TERME ---
-    "Dogecoin": "DOGEUSDT",
-    "Shiba Inu": "SHIBUSDT",
-    "Pepe": "PEPEUSDT",
-    "Brett": "BRETTUSDT",
-    "Mog": "MOGUSDT",
-    "Cat in a Dogs World": "MEWUSDT",
-    "Popcat": "POPCATUSDT",
-    "Neiro": "NEIROUSDT",
-    "Goat": "GOATUSDT",
-    "Act I": "ACTUSDT",
-    "Grass": "GRASSUSDT",
-    "Pnut": "PNUTUSDT",
-    "Moodeng": "MOODENGUSDT",
-    "Sundog": "SUNDOGUSDT",
-    "Book of Meme": "BOOMUSDT",
-}
+CRYPTOS = [
+    ("Bitcoin", "BTCUSDT"),
+    ("Ethereum", "ETHUSDT"),
+    ("BNB", "BNBUSDT"),
+    ("Solana", "SOLUSDT"),
+    ("XRP", "XRPUSDT"),
+    ("Dogecoin", "DOGEUSDT"),
+    ("Cardano", "ADAUSDT"),
+    ("Avalanche", "AVAXUSDT"),
+    ("Polkadot", "DOTUSDT"),
+    ("Chainlink", "LINKUSDT"),
+    ("Polygon", "MATICUSDT"),
+    ("Litecoin", "LTCUSDT"),
+    ("Uniswap", "UNIUSDT"),
+    ("Cosmos", "ATOMUSDT"),
+    ("Stellar", "XLMUSDT"),
+    ("Monero", "XMRUSDT"),
+    ("Algorand", "ALGOUSDT"),
+    ("VeChain", "VETUSDT"),
+    ("Filecoin", "FILUSDT"),
+    ("Aave", "AAVEUSDT"),
+    ("Tron", "TRXUSDT"),
+    ("Tezos", "XTZUSDT"),
+    ("EOS", "EOSUSDT"),
+    ("Near", "NEARUSDT"),
+    ("Fantom", "FTMUSDT"),
+    ("Hedera", "HBARUSDT"),
+    ("Aptos", "APTUSDT"),
+    ("Arbitrum", "ARBUSDT"),
+    ("Optimism", "OPUSDT"),
+    ("Injective", "INJUSDT"),
+    ("Render", "RENDERUSDT"),
+    ("Sei", "SEIUSDT"),
+    ("Sui", "SUIUSDT"),
+    ("Blur", "BLURUSDT"),
+    ("Lido DAO", "LDOUSDT"),
+    ("Maker", "MKRUSDT"),
+    ("Compound", "COMPUSDT"),
+    ("Curve", "CRVUSDT"),
+    ("dYdX", "DYDXUSDT"),
+    ("1inch", "1INCHUSDT"),
+    ("Sandbox", "SANDUSDT"),
+    ("Decentraland", "MANAUSDT"),
+    ("Axie Infinity", "AXSUSDT"),
+    ("Gala", "GALAUSDT"),
+    ("Enjin", "ENJUSDT"),
+    ("Zilliqa", "ZILUSDT"),
+    ("Waves", "WAVESUSDT"),
+    ("Jasmy", "JASMYUSDT"),
+    ("Floki", "FLOKIUSDT"),
+    ("Pepe", "PEPEUSDT"),
+]
 
-RSI_PERIOD = 14
 RSI_ACHAT = 40
 RSI_VENTE = 60
 
-# ===== PRIX VIA BINANCE =====
-def get_prix(symbol):
-    url = "https://api.binance.com/api/v3/klines"
-    params = {"symbol": symbol, "interval": "1h", "limit": 100}
-    response = requests.get(url, params=params, timeout=10)
-    data = response.json()
-    if isinstance(data, list) and len(data) > 0:
-        return [float(item[4]) for item in data]
-    raise ValueError(f"Reponse invalide pour {symbol}")
 
-# ===== CALCUL RSI =====
-def calculer_rsi(closes):
-    series = pd.Series(closes)
-    rsi = ta.momentum.RSIIndicator(series, window=RSI_PERIOD).rsi()
-    return round(rsi.iloc[-1], 2)
-
-# ===== ENVOI TELEGRAM =====
-def envoyer_telegram(message):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
+def envoyer_telegram(msg):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     try:
-        requests.post(url, data=payload, timeout=10)
+        requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"}, timeout=10)
     except Exception as e:
         print(f"Erreur Telegram: {e}")
 
-# ===== RSI EMOJI =====
-def rsi_emoji(rsi):
-    if rsi < 30: return "🔴🔴"  # survente extreme
-    if rsi < 40: return "🟢"         # survente = achat possible
-    if rsi > 70: return "🔥🔥"  # surachat extreme
-    if rsi > 60: return "🟠"         # surachat = vente possible
-    return "⚪"                          # neutre
 
-# ===== ANALYSE =====
+def get_prix_binance(symbol):
+    try:
+        url = f"https://api.binance.com/api/v3/ticker/24hr?symbol={symbol}"
+        r = requests.get(url, timeout=10)
+        data = r.json()
+        if "lastPrice" in data:
+            return float(data["lastPrice"]), float(data["priceChangePercent"])
+        return None, None
+    except:
+        return None, None
+
+
+def get_rsi(symbol, period=14):
+    try:
+        url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1h&limit=100"
+        r = requests.get(url, timeout=10)
+        klines = r.json()
+        if not isinstance(klines, list) or len(klines) < period + 1:
+            return None
+        closes = pd.Series([float(k[4]) for k in klines])
+        delta = closes.diff()
+        gain = delta.where(delta > 0, 0.0)
+        loss = -delta.where(delta < 0, 0.0)
+        avg_gain = gain.rolling(window=period).mean()
+        avg_loss = loss.rolling(window=period).mean()
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        return round(rsi.iloc[-1], 1)
+    except:
+        return None
+
+
 def analyser():
-    print("Analyse en cours...")
+    heure = datetime.now().strftime("%H:%M")
+    print(f"Analyse en cours... {heure}")
+
     alertes = []
     resume_lignes = []
-    heure = datetime.utcnow().strftime("%H:%M UTC")
 
-    for nom, symbol in CRYPTOS.items():
+    for nom, symbol in CRYPTOS:
         try:
-            closes = get_prix(symbol)
-            prix = closes[-1]
-            rsi = calculer_rsi(closes)
-            variation = round(((closes[-1] - closes[-2]) / closes[-2]) * 100, 2)
+            prix, variation = get_prix_binance(symbol)
+            rsi = get_rsi(symbol)
+
+            if prix is None or rsi is None:
+                print(f"Donnees manquantes pour {symbol}")
+                continue
+
             signe = "+" if variation >= 0 else ""
-            emoji = rsi_emoji(rsi)
-            print(f"{nom} | {prix}$ | RSI: {rsi} | {signe}{variation}%")
+            emoji_rsi = "🟢" if rsi < RSI_ACHAT else ("🔴" if rsi > RSI_VENTE else "⚪")
 
-            # Ligne resume
-            resume_lignes.append(f"{emoji} <b>{nom}</b> — {prix}$ | RSI: {rsi} | {signe}{variation}%")
+            ligne = f"{emoji_rsi} <b>{nom}</b> | ${prix:,.4f} | RSI {rsi} | {signe}{variation:.2f}%"
+            resume_lignes.append(ligne)
 
-            # Alertes fortes
             if rsi < RSI_ACHAT:
                 alertes.append(
-                    f"🟢 <b>OPPORTUNITE ACHAT</b> - <b>{nom}</b>\n"
-                    f"💰 Prix : <b>{prix} $</b>\n"
-                    f"📊 RSI : <b>{rsi}</b> (survente)\n"
-                    f"📈 Variation 1h : <b>{signe}{variation}%</b>\n"
-                    f"👉 Potentiel rebond"
+                    f"🟢 <b>ACHAT</b> - <b>{nom}</b>\n"
+                    f"💰 Prix : <b>{prix:,.4f} $</b>\n"
+                    f"📊 RSI : <b>{rsi}</b> (survendu)\n"
+                    f"📈 Variation 1h : <b>{signe}{variation:.2f}%</b>"
                 )
             elif rsi > RSI_VENTE:
                 alertes.append(
-                    f"🔴 <b>SIGNAL VENTE</b> - <b>{nom}</b>\n"
-                    f"💰 Prix : <b>{prix} $</b>\n"
+                    f"🔴 <b>VENTE</b> - <b>{nom}</b>\n"
+                    f"💰 Prix : <b>{prix:,.4f} $</b>\n"
                     f"📊 RSI : <b>{rsi}</b> (surachat)\n"
-                    f"📈 Variation 1h : <b>{signe}{variation}%</b>\n"
-                    f"👉 Attention correction possible"
+                    f"📈 Variation 1h : <b>{signe}{variation:.2f}%</b>"
                 )
-
         except Exception as e:
-            print(f"Erreur pour {nom}: {e}")
-            resume_lignes.append(f"⚫ {nom} — erreur")
+            print(f"Erreur {nom}: {e}")
 
-    # Envoyer alertes fortes en premier
     if alertes:
-        msg_alertes = f"🚨 <b>SIGNAUX FORTS DETECTES</b> 🚨\n" + "━"*25 + "\n\n" + "\n\n".join(alertes)
-        envoyer_telegram(msg_alertes)
+        msg = f"🚨 <b>SIGNAUX DETECTES</b> 🚨\n" + "="*22 + "\n\n" + "\n\n".join(alertes)
+        envoyer_telegram(msg)
 
-    # Toujours envoyer le resume horaire
-    header = f"📊 <b>RAPPORT HORAIRE — {heure}</b>\n🔍 50 cryptos analysees\n⚪ neutre | 🟢 achat | 🔴 vente\n" + "━"*25 + "\n\n"
-    resume = header + "\n".join(resume_lignes)
-    envoyer_telegram(resume)
+    if resume_lignes:
+        chunks = [resume_lignes[i:i+20] for i in range(0, len(resume_lignes), 20)]
+        for i, chunk in enumerate(chunks):
+            header = f"📊 <b>RAPPORT {heure}</b>\n⚪ neutre 🟢 achat 🔴 vente\n" + "="*22 + "\n\n"
+            envoyer_telegram(header + "\n".join(chunk))
+
     print(f"Analyse terminee ! Resume envoye. {len(alertes)} alerte(s) forte(s).")
 
+
 # ===== LANCEMENT =====
-print("Bot crypto demarre ! 50 cryptos surveillees")
+print("Bot crypto demarre !")
 analyser()
 schedule.every(1).hours.do(analyser)
 
 while True:
     schedule.run_pending()
-    time.sleep(60)
+    time.sleep(30)
