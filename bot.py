@@ -4,6 +4,7 @@ import ta
 import time
 import schedule
 import os
+from datetime import datetime
 
 # ===== CONFIGURATION =====
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
@@ -34,7 +35,7 @@ CRYPTOS = {
     "Monero": "XMRUSDT",
     "Ethereum Classic": "ETCUSDT",
     "Internet Computer": "ICPUSDT",
-    # --- MOYEN TERME (DeFi/Layer2) ---
+    # --- MOYEN TERME ---
     "Arbitrum": "ARBUSDT",
     "Optimism": "OPUSDT",
     "Injective": "INJUSDT",
@@ -50,14 +51,13 @@ CRYPTOS = {
     "Starknet": "STRKUSDT",
     "Mantle": "MNTUSDT",
     "Sei": "SEIUSDT",
-    # --- COURT TERME (memecoins / volatiles) ---
+    # --- COURT TERME ---
     "Dogecoin": "DOGEUSDT",
     "Shiba Inu": "SHIBUSDT",
     "Pepe": "PEPEUSDT",
     "Brett": "BRETTUSDT",
     "Mog": "MOGUSDT",
     "Cat in a Dogs World": "MEWUSDT",
-    "Book of Meme": "BOOMUSDT",
     "Popcat": "POPCATUSDT",
     "Neiro": "NEIROUSDT",
     "Goat": "GOATUSDT",
@@ -66,6 +66,7 @@ CRYPTOS = {
     "Pnut": "PNUTUSDT",
     "Moodeng": "MOODENGUSDT",
     "Sundog": "SUNDOGUSDT",
+    "Book of Meme": "BOOMUSDT",
 }
 
 RSI_PERIOD = 14
@@ -97,10 +98,20 @@ def envoyer_telegram(message):
     except Exception as e:
         print(f"Erreur Telegram: {e}")
 
+# ===== RSI EMOJI =====
+def rsi_emoji(rsi):
+    if rsi < 30: return "🔴🔴"  # survente extreme
+    if rsi < 40: return "🟢"         # survente = achat possible
+    if rsi > 70: return "🔥🔥"  # surachat extreme
+    if rsi > 60: return "🟠"         # surachat = vente possible
+    return "⚪"                          # neutre
+
 # ===== ANALYSE =====
 def analyser():
     print("Analyse en cours...")
     alertes = []
+    resume_lignes = []
+    heure = datetime.utcnow().strftime("%H:%M UTC")
 
     for nom, symbol in CRYPTOS.items():
         try:
@@ -109,8 +120,13 @@ def analyser():
             rsi = calculer_rsi(closes)
             variation = round(((closes[-1] - closes[-2]) / closes[-2]) * 100, 2)
             signe = "+" if variation >= 0 else ""
+            emoji = rsi_emoji(rsi)
             print(f"{nom} | {prix}$ | RSI: {rsi} | {signe}{variation}%")
 
+            # Ligne resume
+            resume_lignes.append(f"{emoji} <b>{nom}</b> — {prix}$ | RSI: {rsi} | {signe}{variation}%")
+
+            # Alertes fortes
             if rsi < RSI_ACHAT:
                 alertes.append(
                     f"🟢 <b>OPPORTUNITE ACHAT</b> - <b>{nom}</b>\n"
@@ -130,14 +146,18 @@ def analyser():
 
         except Exception as e:
             print(f"Erreur pour {nom}: {e}")
+            resume_lignes.append(f"⚫ {nom} — erreur")
 
+    # Envoyer alertes fortes en premier
     if alertes:
-        header = f"🚨 <b>CRYPTO ALERTE by Mel</b> 🚨\n{len(alertes)} signal(s) sur 50 cryptos\n" + "━"*25 + "\n\n"
-        message = header + "\n\n".join(alertes)
-        envoyer_telegram(message)
-        print(f"Analyse terminee ! {len(alertes)} alerte(s) envoyee(s)")
-    else:
-        print("Aucun signal - marche calme - pas de message")
+        msg_alertes = f"🚨 <b>SIGNAUX FORTS DETECTES</b> 🚨\n" + "━"*25 + "\n\n" + "\n\n".join(alertes)
+        envoyer_telegram(msg_alertes)
+
+    # Toujours envoyer le resume horaire
+    header = f"📊 <b>RAPPORT HORAIRE — {heure}</b>\n🔍 50 cryptos analysees\n⚪ neutre | 🟢 achat | 🔴 vente\n" + "━"*25 + "\n\n"
+    resume = header + "\n".join(resume_lignes)
+    envoyer_telegram(resume)
+    print(f"Analyse terminee ! Resume envoye. {len(alertes)} alerte(s) forte(s).")
 
 # ===== LANCEMENT =====
 print("Bot crypto demarre ! 50 cryptos surveillees")
