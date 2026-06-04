@@ -1,6 +1,5 @@
 import os
 import requests
-import pandas as pd
 import schedule
 import time
 from datetime import datetime
@@ -8,57 +7,58 @@ from datetime import datetime
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
+# (nom, coingecko_id)
 CRYPTOS = [
-    ("Bitcoin", "BTCUSDT"),
-    ("Ethereum", "ETHUSDT"),
-    ("BNB", "BNBUSDT"),
-    ("Solana", "SOLUSDT"),
-    ("XRP", "XRPUSDT"),
-    ("Dogecoin", "DOGEUSDT"),
-    ("Cardano", "ADAUSDT"),
-    ("Avalanche", "AVAXUSDT"),
-    ("Polkadot", "DOTUSDT"),
-    ("Chainlink", "LINKUSDT"),
-    ("Polygon", "MATICUSDT"),
-    ("Litecoin", "LTCUSDT"),
-    ("Uniswap", "UNIUSDT"),
-    ("Cosmos", "ATOMUSDT"),
-    ("Stellar", "XLMUSDT"),
-    ("Monero", "XMRUSDT"),
-    ("Algorand", "ALGOUSDT"),
-    ("VeChain", "VETUSDT"),
-    ("Filecoin", "FILUSDT"),
-    ("Aave", "AAVEUSDT"),
-    ("Tron", "TRXUSDT"),
-    ("Tezos", "XTZUSDT"),
-    ("EOS", "EOSUSDT"),
-    ("Near", "NEARUSDT"),
-    ("Fantom", "FTMUSDT"),
-    ("Hedera", "HBARUSDT"),
-    ("Aptos", "APTUSDT"),
-    ("Arbitrum", "ARBUSDT"),
-    ("Optimism", "OPUSDT"),
-    ("Injective", "INJUSDT"),
-    ("Render", "RENDERUSDT"),
-    ("Sei", "SEIUSDT"),
-    ("Sui", "SUIUSDT"),
-    ("Blur", "BLURUSDT"),
-    ("Lido DAO", "LDOUSDT"),
-    ("Maker", "MKRUSDT"),
-    ("Compound", "COMPUSDT"),
-    ("Curve", "CRVUSDT"),
-    ("dYdX", "DYDXUSDT"),
-    ("1inch", "1INCHUSDT"),
-    ("Sandbox", "SANDUSDT"),
-    ("Decentraland", "MANAUSDT"),
-    ("Axie Infinity", "AXSUSDT"),
-    ("Gala", "GALAUSDT"),
-    ("Enjin", "ENJUSDT"),
-    ("Zilliqa", "ZILUSDT"),
-    ("Waves", "WAVESUSDT"),
-    ("Jasmy", "JASMYUSDT"),
-    ("Floki", "FLOKIUSDT"),
-    ("Pepe", "PEPEUSDT"),
+    ("Bitcoin", "bitcoin"),
+    ("Ethereum", "ethereum"),
+    ("BNB", "binancecoin"),
+    ("Solana", "solana"),
+    ("XRP", "ripple"),
+    ("Dogecoin", "dogecoin"),
+    ("Cardano", "cardano"),
+    ("Avalanche", "avalanche-2"),
+    ("Polkadot", "polkadot"),
+    ("Chainlink", "chainlink"),
+    ("Polygon", "matic-network"),
+    ("Litecoin", "litecoin"),
+    ("Uniswap", "uniswap"),
+    ("Cosmos", "cosmos"),
+    ("Stellar", "stellar"),
+    ("Monero", "monero"),
+    ("Algorand", "algorand"),
+    ("VeChain", "vechain"),
+    ("Filecoin", "filecoin"),
+    ("Aave", "aave"),
+    ("Tron", "tron"),
+    ("Tezos", "tezos"),
+    ("EOS", "eos"),
+    ("Near", "near"),
+    ("Fantom", "fantom"),
+    ("Hedera", "hedera-hashgraph"),
+    ("Aptos", "aptos"),
+    ("Arbitrum", "arbitrum"),
+    ("Optimism", "optimism"),
+    ("Injective", "injective-protocol"),
+    ("Render", "render-token"),
+    ("Sei", "sei-network"),
+    ("Sui", "sui"),
+    ("Blur", "blur"),
+    ("Lido DAO", "lido-dao"),
+    ("Maker", "maker"),
+    ("Compound", "compound-governance-token"),
+    ("Curve", "curve-dao-token"),
+    ("dYdX", "dydx"),
+    ("1inch", "1inch"),
+    ("Sandbox", "the-sandbox"),
+    ("Decentraland", "decentraland"),
+    ("Axie Infinity", "axie-infinity"),
+    ("Gala", "gala"),
+    ("Enjin", "enjincoin"),
+    ("Zilliqa", "zilliqa"),
+    ("Waves", "waves"),
+    ("Jasmy", "jasmycoin"),
+    ("Floki", "floki"),
+    ("Pepe", "pepe"),
 ]
 
 RSI_ACHAT = 40
@@ -68,40 +68,43 @@ RSI_VENTE = 60
 def envoyer_telegram(msg):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     try:
-        requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"}, timeout=10)
+        r = requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"}, timeout=10)
+        print(f"Telegram: {r.status_code}")
     except Exception as e:
         print(f"Erreur Telegram: {e}")
 
 
-def get_prix_binance(symbol):
+def get_donnees_coingecko(ids):
     try:
-        url = f"https://api.binance.com/api/v3/ticker/24hr?symbol={symbol}"
-        r = requests.get(url, timeout=10)
+        ids_str = ",".join(ids)
+        url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids_str}&vs_currencies=usd&include_24hr_change=true"
+        r = requests.get(url, timeout=15)
+        return r.json()
+    except Exception as e:
+        print(f"Erreur CoinGecko prix: {e}")
+        return {}
+
+
+def get_rsi_coingecko(coin_id, period=14):
+    try:
+        url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days=3&interval=hourly"
+        r = requests.get(url, timeout=15)
         data = r.json()
-        if "lastPrice" in data:
-            return float(data["lastPrice"]), float(data["priceChangePercent"])
-        return None, None
-    except:
-        return None, None
-
-
-def get_rsi(symbol, period=14):
-    try:
-        url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1h&limit=100"
-        r = requests.get(url, timeout=10)
-        klines = r.json()
-        if not isinstance(klines, list) or len(klines) < period + 1:
+        if "prices" not in data or len(data["prices"]) < period + 1:
             return None
-        closes = pd.Series([float(k[4]) for k in klines])
-        delta = closes.diff()
-        gain = delta.where(delta > 0, 0.0)
-        loss = -delta.where(delta < 0, 0.0)
-        avg_gain = gain.rolling(window=period).mean()
-        avg_loss = loss.rolling(window=period).mean()
+        closes = [p[1] for p in data["prices"]]
+        deltas = [closes[i] - closes[i-1] for i in range(1, len(closes))]
+        gains = [d if d > 0 else 0 for d in deltas]
+        losses = [-d if d < 0 else 0 for d in deltas]
+        avg_gain = sum(gains[-period:]) / period
+        avg_loss = sum(losses[-period:]) / period
+        if avg_loss == 0:
+            return 100.0
         rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
-        return round(rsi.iloc[-1], 1)
-    except:
+        return round(rsi, 1)
+    except Exception as e:
+        print(f"Erreur RSI {coin_id}: {e}")
         return None
 
 
@@ -109,17 +112,27 @@ def analyser():
     heure = datetime.now().strftime("%H:%M")
     print(f"Analyse en cours... {heure}")
 
+    ids = [cid for _, cid in CRYPTOS]
+    prix_data = get_donnees_coingecko(ids)
+
     alertes = []
     resume_lignes = []
 
-    for nom, symbol in CRYPTOS:
+    for nom, coin_id in CRYPTOS:
         try:
-            prix, variation = get_prix_binance(symbol)
-            rsi = get_rsi(symbol)
-
-            if prix is None or rsi is None:
-                print(f"Donnees manquantes pour {symbol}")
+            if coin_id not in prix_data:
+                print(f"Prix manquant: {coin_id}")
                 continue
+
+            prix = prix_data[coin_id].get("usd")
+            variation = prix_data[coin_id].get("usd_24h_change", 0)
+
+            if prix is None:
+                continue
+
+            rsi = get_rsi_coingecko(coin_id)
+            if rsi is None:
+                rsi = 50.0
 
             signe = "+" if variation >= 0 else ""
             emoji_rsi = "🟢" if rsi < RSI_ACHAT else ("🔴" if rsi > RSI_VENTE else "⚪")
@@ -130,17 +143,20 @@ def analyser():
             if rsi < RSI_ACHAT:
                 alertes.append(
                     f"🟢 <b>ACHAT</b> - <b>{nom}</b>\n"
-                    f"💰 Prix : <b>{prix:,.4f} $</b>\n"
+                    f"💰 Prix : <b>${prix:,.4f}</b>\n"
                     f"📊 RSI : <b>{rsi}</b> (survendu)\n"
-                    f"📈 Variation 1h : <b>{signe}{variation:.2f}%</b>"
+                    f"📈 Variation 24h : <b>{signe}{variation:.2f}%</b>"
                 )
             elif rsi > RSI_VENTE:
                 alertes.append(
                     f"🔴 <b>VENTE</b> - <b>{nom}</b>\n"
-                    f"💰 Prix : <b>{prix:,.4f} $</b>\n"
+                    f"💰 Prix : <b>${prix:,.4f}</b>\n"
                     f"📊 RSI : <b>{rsi}</b> (surachat)\n"
-                    f"📈 Variation 1h : <b>{signe}{variation:.2f}%</b>"
+                    f"📈 Variation 24h : <b>{signe}{variation:.2f}%</b>"
                 )
+
+            time.sleep(1.5)  # respect rate limit CoinGecko
+
         except Exception as e:
             print(f"Erreur {nom}: {e}")
 
@@ -149,16 +165,20 @@ def analyser():
         envoyer_telegram(msg)
 
     if resume_lignes:
-        chunks = [resume_lignes[i:i+20] for i in range(0, len(resume_lignes), 20)]
-        for i, chunk in enumerate(chunks):
+        chunks = [resume_lignes[i:i+15] for i in range(0, len(resume_lignes), 15)]
+        for chunk in chunks:
             header = f"📊 <b>RAPPORT {heure}</b>\n⚪ neutre 🟢 achat 🔴 vente\n" + "="*22 + "\n\n"
             envoyer_telegram(header + "\n".join(chunk))
+            time.sleep(1)
+    else:
+        envoyer_telegram(f"⚠️ Aucune donnee recue a {heure}. Verifier la connexion.")
 
-    print(f"Analyse terminee ! Resume envoye. {len(alertes)} alerte(s) forte(s).")
+    print(f"Analyse terminee ! {len(alertes)} alerte(s). {len(resume_lignes)} cryptos OK.")
 
 
 # ===== LANCEMENT =====
 print("Bot crypto demarre !")
+envoyer_telegram("🤖 <b>Bot crypto demarre !</b>\nRapport toutes les heures. RSI achat < 40 | vente > 60")
 analyser()
 schedule.every(1).hours.do(analyser)
 
